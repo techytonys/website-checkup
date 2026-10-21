@@ -437,6 +437,47 @@
         .text-door { padding: 20px 14px 16px; }
       }
 
+      /* ---------- versus strip ---------- */
+      .versus {
+        margin-top: 18px;
+        background: var(--glass);
+        border: 1px solid var(--glass-line); border-radius: 14px;
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(16px) saturate(1.3); -webkit-backdrop-filter: blur(16px) saturate(1.3);
+        padding: 20px 24px;
+      }
+      .vs-row { display: flex; align-items: center; gap: 14px; }
+      .vs-side { flex: 1; min-width: 0; }
+      .vs-side.right { text-align: right; }
+      .vs-who {
+        display: block; font-size: 11px; font-weight: 600;
+        letter-spacing: 0.1em; text-transform: uppercase;
+        color: var(--ink-faint); margin-bottom: 5px; word-break: break-all;
+      }
+      .vs-num { font-size: 40px; font-weight: 800; line-height: 1; color: #ffffff; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+      .vs-grade { font-size: 15px; font-weight: 600; color: var(--ink-soft); margin-left: 6px; }
+      .vs-vs {
+        flex: none; font-size: 12.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+        color: var(--ink-soft); border: 1px solid var(--glass-line); border-radius: 999px; padding: 6px 12px;
+        background: rgba(255, 255, 255, 0.05);
+      }
+      .vs-verdict {
+        margin: 15px 0 0; padding-top: 14px; border-top: 1px solid var(--hairline);
+        text-align: center; font-size: 16px; font-weight: 600; color: #ffffff;
+      }
+      @media (max-width: 520px) {
+        .versus { padding: 16px; }
+        .vs-num { font-size: 32px; }
+      }
+
+      /* ---------- pdf download ---------- */
+      .report-actions { margin-top: 18px; }
+      .btn-pdf {
+        padding: 13px 22px; font-size: 15.5px;
+        background: linear-gradient(95deg, #ffc2dd, #ffd9a8 30%, #c9f2d4 58%, #bfe3ff 82%, #ddd0ff);
+      }
+      .report-actions .form-error { margin: 12px 0 0; }
+
       .again-row { text-align: center; margin-top: 26px; }
       .hidden { display: none !important; }
       .hp { position: absolute; left: -9999px; top: -9999px; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
@@ -464,6 +505,11 @@
           <div class="field">
             <svg viewBox="0 0 24 24" fill="none" stroke="#4c9be8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
             <input id="urlInput" type="text" inputmode="url" autocomplete="url" placeholder="yourbusiness.com" />
+          </div>
+          <label for="competitorInput">Competitor&rsquo;s website <span class="opt">(optional)</span></label>
+          <div class="field">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#f59e4c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            <input id="competitorInput" type="text" inputmode="url" autocomplete="off" placeholder="rivalbusiness.com" />
           </div>
           <div class="form-error" id="scanError" role="alert"></div>
           <button class="btn btn-primary" type="submit" id="scanBtn">
@@ -540,6 +586,16 @@
             <span class="sh-grade hidden" id="shGrade"></span>
           </div>
           <div class="sh-meta" id="shMeta"></div>
+        </div>
+
+        <div class="versus hidden" id="versusStrip"></div>
+
+        <div class="report-actions hidden" id="pdfRow">
+          <button class="btn btn-pdf" type="button" id="pdfBtn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+            <span id="pdfBtnLabel">Download PDF</span>
+          </button>
+          <div class="form-error" id="pdfError" role="alert"></div>
         </div>
 
         <div id="groups"></div>
@@ -697,6 +753,7 @@
       var MINIMAL_TITLES = ["copyright says", "missing legal pages"];
 
       var lastReport = null;
+      var currentReportId = null;
       var stepTimer = null;
       var textPhone = "";
 
@@ -867,6 +924,7 @@
           return;
         }
         textPhone = formatPhone(digits);
+        var competitor = $("competitorInput").value.trim();
 
         $("progressSite").textContent = url;
         show("viewProgress");
@@ -878,7 +936,9 @@
         var attempts = [url].concat(altForms(url));
         var lastMsg = "";
         function tryAttempt(i) {
-          return postCheckup({ url: attempts[i], phone: digits }).then(function (data) {
+          var payload = { url: attempts[i], phone: digits };
+          if (competitor) payload.competitor = competitor;
+          return postCheckup(payload).then(function (data) {
             if (data && data.ok === true) return data;
             var msg = (data && data.error) ? String(data.error) : "";
             var retryable = !msg || /couldn't load|answered with an error/i.test(msg);
@@ -940,6 +1000,38 @@
         $("shMeta").innerHTML = meta.map(function (m) {
           return '<span class="m' + (m.cls ? " " + m.cls : "") + '">' + m.icon + "<span>" + esc(m.text) + "</span></span>";
         }).join("");
+
+        /* versus strip — only when the scan compared a competitor */
+        var comp = data.competitor;
+        var vsEl = $("versusStrip");
+        if (comp && comp.site && comp.score != null) {
+          var cScore = Math.max(0, Math.min(100, Number(comp.score) || 0));
+          var diff = score - cScore;
+          var verdict = diff > 0
+            ? "You\u2019re ahead by " + diff + " point" + (diff === 1 ? "" : "s")
+            : diff < 0
+              ? "They\u2019re ahead by " + (-diff) + " point" + (diff === -1 ? "" : "s")
+              : "Dead even";
+          vsEl.innerHTML =
+            '<div class="vs-row">' +
+              '<div class="vs-side"><span class="vs-who">You</span><span class="vs-num">' + score + "</span>" +
+                (grade ? '<span class="vs-grade">(' + esc(grade) + ")</span>" : "") + "</div>" +
+              '<span class="vs-vs">vs</span>' +
+              '<div class="vs-side right"><span class="vs-who">' + esc(comp.site) + '</span><span class="vs-num">' + cScore + "</span>" +
+                (comp.grade ? '<span class="vs-grade">(' + esc(comp.grade) + ")</span>" : "") + "</div>" +
+            "</div>" +
+            '<p class="vs-verdict">' + esc(verdict) + "</p>";
+          vsEl.classList.remove("hidden");
+        } else {
+          vsEl.classList.add("hidden");
+          vsEl.innerHTML = "";
+        }
+
+        /* PDF download — only when the report was saved under an id */
+        currentReportId = data.report_id || data.id || null;
+        $("pdfError").classList.remove("show");
+        resetPdfBtn();
+        $("pdfRow").classList.toggle("hidden", !currentReportId);
 
         /* texting confirmation (only when a phone was given on a fresh scan) */
         if (textPhone) {
@@ -1015,6 +1107,51 @@
 
         show("viewReport");
       }
+
+      /* ---------- PDF download ---------- */
+      function resetPdfBtn() {
+        $("pdfBtn").disabled = false;
+        $("pdfBtnLabel").textContent = "Download PDF";
+      }
+      $("pdfBtn").addEventListener("click", function () {
+        if (!currentReportId) return;
+        var errBox = $("pdfError");
+        errBox.classList.remove("show");
+        var btn = $("pdfBtn");
+        btn.disabled = true;
+        $("pdfBtnLabel").textContent = "Preparing your PDF\u2026";
+        postCheckup({ pdf: currentReportId }, 70000)
+          .then(function (data) {
+            resetPdfBtn();
+            if (data && data.ok === true && data.pdf_b64) {
+              try {
+                var bin = atob(data.pdf_b64);
+                var bytes = new Uint8Array(bin.length);
+                for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+                var blob = new Blob([bytes], { type: "application/pdf" });
+                var objUrl = URL.createObjectURL(blob);
+                var a = document.createElement("a");
+                a.href = objUrl;
+                a.download = data.filename || "website-checkup.pdf";
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                setTimeout(function () { URL.revokeObjectURL(objUrl); }, 4000);
+              } catch (e) {
+                errBox.textContent = "The PDF came back unreadable \u2014 give it another try.";
+                errBox.classList.add("show");
+              }
+            } else {
+              errBox.textContent = (data && data.error) ? data.error : "That PDF didn\u2019t come through. Give it another try.";
+              errBox.classList.add("show");
+            }
+          })
+          .catch(function () {
+            resetPdfBtn();
+            errBox.textContent = "That PDF didn\u2019t come through \u2014 looks like a connection hiccup. Give it another try.";
+            errBox.classList.add("show");
+          });
+      });
 
       /* ---------- lead ---------- */
       $("openLeadBtn").addEventListener("click", function () {
@@ -1134,10 +1271,12 @@
       /* ---------- reset ---------- */
       $("againBtn").addEventListener("click", function () {
         $("urlInput").value = "";
+        $("competitorInput").value = "";
         $("phoneInput").value = "";
         textPhone = "";
         $("leadForm").reset();
         lastReport = null;
+        currentReportId = null;
         show("viewStart");
         $("urlInput").focus();
       });
@@ -1163,6 +1302,7 @@
               setTimeout(function () { showLoadError(msg); }, 400);
               return;
             }
+            if (!data.report_id && !data.id) data.report_id = m[1];
             finishSteps(function () { renderReport(data, data.site || ""); });
           })
           .catch(function () {
