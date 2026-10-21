@@ -786,6 +786,59 @@
             throw err;
           });
       }
+      /* ---------- first-party traffic tracking (Funnelytics-style funnel) ----------
+         Fire-and-forget: never blocks, delays, or breaks any user flow. */
+      var _ckSessionId = null;
+      function ckSessionId() {
+        if (_ckSessionId) return _ckSessionId;
+        try {
+          var existing = sessionStorage.getItem("ck_sess");
+          if (existing) { _ckSessionId = existing; return _ckSessionId; }
+          var id = "";
+          try {
+            if (window.crypto && crypto.getRandomValues) {
+              var buf = new Uint8Array(16);
+              crypto.getRandomValues(buf);
+              id = Array.prototype.map.call(buf, function (b) { return ("0" + b.toString(16)).slice(-2); }).join("");
+            }
+          } catch (e) {}
+          if (!id) id = Date.now().toString(36) + Math.random().toString(36).slice(2, 12) + Math.random().toString(36).slice(2, 8);
+          _ckSessionId = id;
+          try { sessionStorage.setItem("ck_sess", id); } catch (e2) {}
+          return _ckSessionId;
+        } catch (e) {
+          _ckSessionId = Date.now().toString(36) + Math.random().toString(36).slice(2, 12);
+          return _ckSessionId;
+        }
+      }
+      function ckUtm(key) {
+        try {
+          var params = new URLSearchParams(window.location.search || "");
+          return params.get(key) || "";
+        } catch (e) { return ""; }
+      }
+      function trackEvent(eventName) {
+        try {
+          var payload = {
+            track: true,
+            page: "checkup",
+            event: eventName,
+            referrer: document.referrer || "",
+            utm_source: ckUtm("utm_source"),
+            utm_medium: ckUtm("utm_medium"),
+            utm_campaign: ckUtm("utm_campaign"),
+            session_id: ckSessionId()
+          };
+          var p = postCheckup(payload, 8000);
+          if (p && typeof p.catch === "function") p.catch(function () {});
+        } catch (e) { /* tracking must never break the page */ }
+      }
+      /* "view" — once on load, except saved-report links (?r=) which are not funnel entries */
+      try {
+        var _hasSavedReport = /[?&]r=[0-9a-fA-F-]{36}(?:&|$)/.test(window.location.search || "") || new URLSearchParams(window.location.search || "").has("r");
+        if (!_hasSavedReport) trackEvent("view");
+      } catch (e) {}
+
       /* the other spellings of the same address: www <-> bare, scheme kept */
       function altForms(raw) {
         var s = String(raw || "").trim();
@@ -925,6 +978,7 @@
         }
         textPhone = formatPhone(digits);
         var competitor = $("competitorInput").value.trim();
+        try { trackEvent("scan_start"); } catch (e) {}
 
         $("progressSite").textContent = url;
         show("viewProgress");
@@ -1105,6 +1159,7 @@
           $("textDoor").classList.add("hidden");
         }
 
+        try { trackEvent("scan_done"); } catch (e) {}
         show("viewReport");
       }
 
@@ -1205,6 +1260,7 @@
           .then(function (data) {
             btn.disabled = false;
             if (data && data.ok === true) {
+              try { trackEvent("lead"); } catch (e) {}
               $("leadForm").classList.add("hidden");
               $("leadSuccess").classList.remove("hidden");
               $("fixCard").scrollIntoView({ behavior: "smooth", block: "center" });
@@ -1253,6 +1309,7 @@
           .then(function (data) {
             btn.disabled = false;
             if (data && data.ok === true) {
+              try { trackEvent("textme"); } catch (e) {}
               $("textForm").classList.add("hidden");
               $("textSuccessMsg").textContent = "Tony will get back to you by text at " + textPhone + ".";
               $("textSuccess").classList.remove("hidden");
