@@ -833,6 +833,50 @@
           if (p && typeof p.catch === "function") p.catch(function () {});
         } catch (e) { /* tracking must never break the page */ }
       }
+      /* ---------- pageview event (Website Analytics dashboard feed) ----------
+         Fires on EVERY page load — including ?r= saved-report loads, which are
+         still pageviews even though they are not funnel entries. Carries a
+         persistent visitor id so the dashboard can separate pageviews from
+         unique visitors. Fire-and-forget like every other tracking call. */
+      function ckVisitorId() {
+        try {
+          var existing = localStorage.getItem("ck_vid");
+          if (existing) return existing;
+          var id = "";
+          try {
+            if (window.crypto && crypto.getRandomValues) {
+              var buf = new Uint8Array(16);
+              crypto.getRandomValues(buf);
+              id = Array.prototype.map.call(buf, function (b) { return ("0" + b.toString(16)).slice(-2); }).join("");
+            }
+          } catch (e) {}
+          if (!id) id = Date.now().toString(36) + Math.random().toString(36).slice(2, 12) + Math.random().toString(36).slice(2, 8);
+          try { localStorage.setItem("ck_vid", id); } catch (e2) {}
+          return id;
+        } catch (e) {
+          return "";
+        }
+      }
+      function trackPageview() {
+        try {
+          var payload = {
+            track: true,
+            page: "checkup",
+            event: "pageview",
+            page_path: window.location.pathname,
+            visitor_id: ckVisitorId(),
+            referrer: document.referrer || "",
+            utm_source: ckUtm("utm_source"),
+            utm_medium: ckUtm("utm_medium"),
+            utm_campaign: ckUtm("utm_campaign"),
+            session_id: ckSessionId()
+          };
+          var p = postCheckup(payload, 8000);
+          if (p && typeof p.catch === "function") p.catch(function () {});
+        } catch (e) { /* tracking must never break the page */ }
+      }
+      trackPageview();
+
       /* "view" — once on load, except saved-report links (?r=) which are not funnel entries */
       try {
         var _hasSavedReport = /[?&]r=[0-9a-fA-F-]{36}(?:&|$)/.test(window.location.search || "") || new URLSearchParams(window.location.search || "").has("r");
